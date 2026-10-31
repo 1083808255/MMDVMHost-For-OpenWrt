@@ -22,8 +22,8 @@ endef
 
 define Build/Prepare
 	$(call Build/Prepare/Default)
-	# 1. 自动生成缺失的 GitVersion.h，避免编译终止
-	echo '#define GIT_VERSION "master"' > $(PKG_BUILD_DIR)/GitVersion.h
+	# 1. 自动生成缺失的 GitVersion.h，匹配源码里的 gitversion 变量
+	echo "const char *gitversion = \"master\";" > $(PKG_BUILD_DIR)/GitVersion.h
 	# 2. 修正补丁替换，官方源码是 MMDVM-Host.cpp（带横杠），解决 root 降权问题
 	-$(SED) 's/if (getuid() == 0)/if (false)/g' $(PKG_BUILD_DIR)/MMDVM-Host.cpp
 endef
