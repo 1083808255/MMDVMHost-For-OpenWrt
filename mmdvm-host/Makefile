@@ -17,7 +17,7 @@ define Package/mmdvm-host
   SECTION:=net
   CATEGORY:=Network
   TITLE:=MMDVM Host for OpenWrt
-  DEPENDS:=+libstdcpp +libpthread
+  DEPENDS:=+libstdcpp +libpthread +nlohmannjson
 endef
 
 define Build/Prepare
