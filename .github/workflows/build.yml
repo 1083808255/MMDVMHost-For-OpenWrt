@@ -9,9 +9,11 @@ jobs:
     strategy:
       matrix:
         include:
+          # X86 架构
           - target: x86
             arch: x86_64
             sdk_url: https://downloads.openwrt.org/releases/24.10.5/targets/x86/64/openwrt-sdk-24.10.5-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+          # MT7628 架构
           - target: mt76x8
             arch: mipsel_24kc
             sdk_url: https://downloads.openwrt.org/releases/24.10.5/targets/ramips/mt76x8/openwrt-sdk-24.10.5-ramips-mt76x8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
@@ -43,21 +45,26 @@ jobs:
           
           ./scripts/feeds update -a
           ./scripts/feeds install -a -p mmdvm
-          make defconfig
           
-          echo "=== 编译最新版 MMDVMHost 与 DMRGateway ==="
-          make package/mmdvm-host/compile V=s || true
-          make package/dmr-gateway/compile V=s || true
+          echo "=== 生成基础配置 ==="
+          # 加上 V=s 并把报错暴露出来，用 || true 防止直接崩溃
+          make defconfig V=s || true
+          
+          echo "=== 编译 MMDVMHost ==="
+          make package/mmdvm-host/compile V=s
+          
+          echo "=== 编译 DMRGateway ==="
+          make package/dmr-gateway/compile V=s
 
       - name: Collect IPKs
         run: |
           DEST_DIR="mmdvm-src/ipk/ipk-${{ matrix.target }}"
           mkdir -p "$DEST_DIR"
           
-          # 抓取所有编译出来的 ipk (包括自动编译的依赖库)
+          # 抓取编译出来的所有 ipk（包括自动编译的依赖库）
           cp sdk/bin/packages/${{ matrix.arch }}/*/*.ipk "$DEST_DIR/" || true
           
-          # 生成索引文件
+          # 生成带正确 Architecture 的索引文件
           cd "$DEST_DIR"
           echo "Architecture: ${{ matrix.arch }}" > Packages
           for f in *.ipk; do
