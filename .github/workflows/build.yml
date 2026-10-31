@@ -24,6 +24,15 @@ jobs:
         with:
           path: mmdvm-src
 
+      # 提速点 1：缓存 feets，避免每次重复拉取庞大的包索引
+      - name: Cache OpenWrt Feeds
+        uses: actions/cache@v4
+        with:
+          path: sdk/feeds
+          key: ${{ runner.os }}-feeds-${{ matrix.target }}-${{ hashFiles('**/feeds.conf.default') }}
+          restore-keys: |
+            ${{ runner.os }}-feeds-${{ matrix.target }}-
+
       - name: Install Dependencies
         run: |
           sudo apt-get update
@@ -31,49 +40,50 @@ jobs:
 
       - name: Download OpenWrt SDK
         run: |
-          wget ${{ matrix.sdk_url }}
+          wget -q ${{ matrix.sdk_url }}
           tar --use-compress-program=unzstd -xf openwrt-sdk-*.tar.zst
           mv openwrt-sdk-*/ sdk
           
-      - name: Setup Feeds and Compile
+      - name: Setup and Compile
         run: |
           cd sdk
           export TERM=xterm
           
-          # 核心修复：用 sed 进行安全的域名替换，把导致超时的 mirror 替换为官方 CDN，不会破坏语法
+          # 防止镜像超时
           sed -i 's/mirror2.openwrt.org/sources.cdn.openwrt.org/g' scripts/download.pl
           sed -i 's/mirror1.openwrt.org/sources.cdn.openwrt.org/g' scripts/download.pl
           
           cp feeds.conf.default feeds.conf
           echo "src-git mmdvm file://$GITHUB_WORKSPACE/mmdvm-src" >> feeds.conf
           
+          # 更新 feed
           ./scripts/feeds update -a
-          
-          # 只安装我们的包以及它们的必要依赖（nlohmannjson）
           ./scripts/feeds install mmdvm-host dmr-gateway
           ./scripts/feeds install nlohmannjson || true
           
-          echo "=== 生成基础配置 ==="
-          # 强制选中我们的包，防止被 defconfig 过滤掉
+          echo "=== 生成极简配置 ==="
+          # 提速点 3：直接写 .config，跳过极其耗时的 make defconfig 全局扫描
           echo "CONFIG_PACKAGE_mmdvm-host=m" >> .config
           echo "CONFIG_PACKAGE_dmr-gateway=m" >> .config
-          make defconfig V=s
+          echo "CONFIG_PACKAGE_libstdcpp=m" >> .config
+          echo "CONFIG_PACKAGE_libpthread=m" >> .config
+          
+          # 提速点 2：多线程预下载源码包
+          make download -j8 V=w
           
           echo "=== 编译 MMDVMHost ==="
-          make package/mmdvm-host/compile V=s
+          # 提速点 4：使用多核并发编译，V=w 只输出警告
+          make package/mmdvm-host/compile -j$(nproc) V=w
           
           echo "=== 编译 DMRGateway ==="
-          make package/dmr-gateway/compile V=s
+          make package/dmr-gateway/compile -j$(nproc) V=w
 
       - name: Collect IPKs
         run: |
           DEST_DIR="mmdvm-src/ipk/ipk-${{ matrix.target }}"
           mkdir -p "$DEST_DIR"
-          
-          # 抓取编译出来的所有 ipk（包括自动编译的依赖库）
           cp sdk/bin/packages/${{ matrix.arch }}/*/*.ipk "$DEST_DIR/" || true
           
-          # 生成带正确 Architecture 的索引文件
           cd "$DEST_DIR"
           echo "Architecture: ${{ matrix.arch }}" > Packages
           for f in *.ipk; do
