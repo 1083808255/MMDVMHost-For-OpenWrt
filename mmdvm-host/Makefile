@@ -25,13 +25,10 @@ define Package/mmdvm-host/description
   MMDVM Host connects modems to digital voice networks.
 endef
 
-define Build/Prepare
-	$(call Build/Prepare/Default)
-	# 如果你用方法A，可以在这里用 sed 注入头文件
-	# 如果你用方法B，OpenWrt 会自动把 patches/ 文件夹下的补丁打上，这里什么都不用写
-endef
-
 define Build/Compile
+	# 强行打补丁：解决最新版 GCC 编译器找不到头文件的报错
+	find $(PKG_BUILD_DIR) -name "*.cpp" -exec sed -i '1i #include <cstring>\n#include <cstdio>' {} +
+	# 编译
 	$(MAKE) -C $(PKG_BUILD_DIR) \
 		CXX="$(TARGET_CXX)" \
 		CXXFLAGS="$(TARGET_CXXFLAGS)" \
@@ -39,15 +36,12 @@ define Build/Compile
 endef
 
 define Package/mmdvm-host/install
-	# 1. 安装主程序
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/MMDVMHost $(1)/usr/bin/
 	
-	# 2. 安装默认配置文件
 	$(INSTALL_DIR) $(1)/etc
 	$(INSTALL_CONF) ./files/MMDVM.ini $(1)/etc/MMDVM.ini
 	
-	# 3. 安装 OpenWrt 启动脚本
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/mmdvm.init $(1)/etc/init.d/mmdvmhost
 endef
