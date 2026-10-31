@@ -10,9 +10,7 @@ CONF=/etc/MMDVM.ini
 start_service() {
 	procd_open_instance
 	procd_set_param command "$PROG" "$CONF"
-	# 如果程序崩溃，自动重启
 	procd_set_param respawn
-	# 监视配置文件变化
 	procd_set_param file "$CONF"
 	procd_close_instance
 }
