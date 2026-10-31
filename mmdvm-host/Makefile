@@ -24,10 +24,10 @@ define Package/mmdvm-host/description
 endef
 
 define Build/Compile
-	find $(PKG_BUILD_DIR) -name "*.cpp" -exec sed -i '1i #include <cstring>\n#include <cstdio>' {} +
 	$(MAKE) -C $(PKG_BUILD_DIR) \
+		$(TARGET_CONFIGURE_OPTS) \
 		CXX="$(TARGET_CXX)" \
-		CXXFLAGS="$(TARGET_CXXFLAGS)" \
+		CXXFLAGS="$(TARGET_CXXFLAGS) -D_OPENWRT -std=c++11" \
 		LDFLAGS="$(TARGET_LDFLAGS)"
 endef
 
