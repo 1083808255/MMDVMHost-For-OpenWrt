@@ -22,13 +22,14 @@ endef
 
 define Build/Prepare
 	$(call Build/Prepare/Default)
-	# 直接修改源码文件，解决 root 降权报错问题 (替代 patch)
-	$(SED) 's/if (getuid() == 0)/if (false)/g' $(PKG_BUILD_DIR)/MMDVM-Host.cpp
+	# 尝试修改源码，跳过 root 降权报错（带横杠和不带横杠都试一遍，加 - 防止找不到文件报错）
+	-$(SED) 's/if (getuid() == 0)/if (false)/g' $(PKG_BUILD_DIR)/MMDVM-Host.cpp
+	-$(SED) 's/if (getuid() == 0)/if (false)/g' $(PKG_BUILD_DIR)/MMDVMHost.cpp
 endef
 
 define Build/Compile
-	# 手动指定编译命令，绕过官方不兼容的 Makefile
-	$(TARGET_CXX) $(TARGET_CXXFLAGS) -D_OPENWRT -std=c++11 -O2 -o $(PKG_BUILD_DIR)/MMDVMHost $(PKG_BUILD_DIR)/*.cpp -lpthread
+	# 直接调用交叉编译器，强制包含 nlohmannjson 的头文件路径，规避官方 Makefile 问题
+	$(TARGET_CXX) $(TARGET_CXXFLAGS) -I$(STAGING_DIR)/usr/include -D_OPENWRT -std=c++11 -O2 -o $(PKG_BUILD_DIR)/MMDVMHost $(PKG_BUILD_DIR)/*.cpp -lpthread
 endef
 
 define Package/mmdvm-host/install
