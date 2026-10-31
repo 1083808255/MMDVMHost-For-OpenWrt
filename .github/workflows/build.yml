@@ -12,12 +12,10 @@ jobs:
           # X86 架构
           - target: x86
             arch: x86_64
-            target_config: "CONFIG_TARGET_x86=y\nCONFIG_TARGET_x86_64=y"
             sdk_url: https://downloads.openwrt.org/releases/24.10.5/targets/x86/64/openwrt-sdk-24.10.5-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
           # MT7628 架构
           - target: mt76x8
             arch: mipsel_24kc
-            target_config: "CONFIG_TARGET_ramips=y\nCONFIG_TARGET_ramips_mt76x8=y\nCONFIG_TARGET_ramips_mt76x8_DEVICE_generic=y"
             sdk_url: https://downloads.openwrt.org/releases/24.10.5/targets/ramips/mt76x8/openwrt-sdk-24.10.5-ramips-mt76x8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
 
     steps:
@@ -26,7 +24,7 @@ jobs:
         with:
           path: mmdvm-src
 
-      # 缓存 feets，避免每次重复拉取庞大的包索引
+      # 缓存 feeds，避免每次重复拉取庞大的包索引
       - name: Cache OpenWrt Feeds
         uses: actions/cache@v4
         with:
@@ -63,26 +61,11 @@ jobs:
           ./scripts/feeds install mmdvm-host dmr-gateway
           ./scripts/feeds install nlohmannjson || true
           
-          echo "=== 生成极简配置 ==="
-          # 2. 彻底清空旧配置，写入对应架构的配置
-          echo -e "${{ matrix.target_config }}" > .config
+          echo "=== 直接编译（绕过 defconfig，彻底告别蓝底菜单） ==="
+          # 2. 直接将配置作为变量传给 make，无视全局冲突
+          make package/mmdvm-host/compile -j$(nproc) V=w CONFIG_PACKAGE_mmdvm-host=m CONFIG_PACKAGE_nlohmannjson=y
           
-          # 3. 开启我们的包
-          echo "CONFIG_PACKAGE_mmdvm-host=m" >> .config
-          echo "CONFIG_PACKAGE_dmr-gateway=m" >> .config
-          echo "CONFIG_PACKAGE_nlohmannjson=y" >> .config
-          
-          # 4. 核心修复：强制自动回答 yes，绝对不弹出图形界面
-          yes "" | make defconfig
-          
-          # 5. 多线程预下载（加入 -i 忽略下载失败）
-          make download -j8 V=w -i
-          
-          echo "=== 编译 MMDVMHost ==="
-          make package/mmdvm-host/compile -j$(nproc) V=w
-          
-          echo "=== 编译 DMRGateway ==="
-          make package/dmr-gateway/compile -j$(nproc) V=w
+          make package/dmr-gateway/compile -j$(nproc) V=w CONFIG_PACKAGE_dmr-gateway=m
 
       - name: Collect IPKs
         run: |
