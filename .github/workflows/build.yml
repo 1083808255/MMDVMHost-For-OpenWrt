@@ -1,59 +1,17 @@
-name: Build G4KLX MMDVMHost and Gateway
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          # X86 架构
-          - target: x86
-            arch: x86_64
-            sdk_url: https://downloads.openwrt.org/releases/24.10.5/targets/x86/64/openwrt-sdk-24.10.5-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-          # MT7628 架构
-          - target: mt76x8
-            arch: mipsel_24kc
-            sdk_url: https://downloads.openwrt.org/releases/24.10.5/targets/ramips/mt76x8/openwrt-sdk-24.10.5-ramips-mt76x8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-        with:
-          path: mmdvm-src
-
-      - name: Cache OpenWrt Feeds
-        uses: actions/cache@v4
-        with:
-          path: sdk/feeds
-          key: ${{ runner.os }}-feeds-${{ matrix.target }}-${{ hashFiles('**/feeds.conf.default') }}
-          restore-keys: |
-            ${{ runner.os }}-feeds-${{ matrix.target }}-
-
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev gawk git subversion libssl-dev gettext unzip zlib1g-dev file python3 python3-setuptools wget zstd
-
-      - name: Download OpenWrt SDK
-        run: |
-          wget -q ${{ matrix.sdk_url }}
-          tar --use-compress-program=unzstd -xf openwrt-sdk-*.tar.zst
-          mv openwrt-sdk-*/ sdk
-          
       - name: Setup and Compile
         run: |
           cd sdk
           export TERM=xterm
           
-          # 1. 封杀超时源
+          # 封杀超时源
           sudo echo "127.0.0.1 mirror2.openwrt.org" | sudo tee -a /etc/hosts
           sed -i 's/mirror2.openwrt.org/sources.cdn.openwrt.org/g' scripts/download.pl
           sed -i 's/mirror1.openwrt.org/sources.cdn.openwrt.org/g' scripts/download.pl
           
           rm -f .config
+          
+          # 清理上一次残留的编译文件（防止引发奇怪报错）
+          rm -rf build_dir/target-*/mmdvm-host-* build_dir/target-*/dmr-gateway-*
           
           cp feeds.conf.default feeds.conf
           echo "src-git mmdvm file://$GITHUB_WORKSPACE/mmdvm-src" >> feeds.conf
@@ -70,45 +28,9 @@ jobs:
           echo "CONFIG_PACKAGE_nlohmannjson=y" >> .config
           echo "CONFIG_PACKAGE_libmosquitto=y" >> .config
           
-          # 直接生成配置，避免管道引发的 Broken pipe 错误
           make defconfig
           
           echo "=== 开始编译 ==="
           make package/mmdvm-host/compile V=s
           
           make package/dmr-gateway/compile V=s
-
-      - name: Collect IPKs
-        run: |
-          DEST_DIR="mmdvm-src/ipk/ipk-${{ matrix.target }}"
-          mkdir -p "$DEST_DIR"
-          cp sdk/bin/packages/${{ matrix.arch }}/*/*.ipk "$DEST_DIR/" || true
-          
-          cd "$DEST_DIR"
-          echo "Architecture: ${{ matrix.arch }}" > Packages
-          for f in *.ipk; do
-            if [ -f "$f" ]; then
-              echo "Package: ${f%%_*}"
-              echo "Version: $(echo $f | cut -d_ -f2)"
-              echo "Architecture: ${{ matrix.arch }}"
-              echo "Filename: $f"
-              echo "Size: $(stat -c %s $f)"
-              echo "Description: Auto generated package $f"
-              echo ""
-            fi
-          done >> Packages
-          gzip -c Packages > Packages.gz
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: G4KLX-MMDVM-${{ matrix.target }}
-          path: mmdvm-src/ipk/ipk-${{ matrix.target }}/*.ipk
-
-      - name: Auto Commit to Repo
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          repository: mmdvm-src
-          commit_message: "Auto-build: Update G4KLX IPKs for ${{ matrix.target }}"
-          branch: main
-          file_pattern: ipk/**/*
