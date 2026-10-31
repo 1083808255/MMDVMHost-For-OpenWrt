@@ -2,42 +2,38 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=mmdvm-host
 PKG_RELEASE:=1
+
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/g4klx/MMDVMHost.git
 PKG_SOURCE_VERSION:=master
 PKG_MIRROR_HASH:=skip
+
 PKG_LICENSE:=GPL-2.0
-PKG_LICENSE_FILES:=COPYING
+PKG_LICENSE_FILES:=LICENSE
 
 include $(INCLUDE_DIR)/package.mk
 
 define Package/mmdvm-host
-  SECTION:=utils
-  CATEGORY:=Utilities
-  TITLE:=Official MMDVM Host by G4KLX
-  URL:=https://github.com/g4klx/MMDVMHost
-  DEPENDS:=+libstdcpp
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE:=MMDVM Host for OpenWrt
+  DEPENDS:=+libstdcpp +libpthread
 endef
 
-define Package/mmdvm-host/description
-  MMDVM Host connects modems to digital voice networks.
+define Build/Prepare
+	$(call Build/Prepare/Default)
+	# 直接修改源码文件，解决 root 降权报错问题 (替代 patch)
+	$(SED) 's/if (getuid() == 0)/if (false)/g' $(PKG_BUILD_DIR)/MMDVM-Host.cpp
 endef
 
 define Build/Compile
-	$(MAKE) -C $(PKG_BUILD_DIR) \
-		$(TARGET_CONFIGURE_OPTS) \
-		CXX="$(TARGET_CXX)" \
-		CXXFLAGS="$(TARGET_CXXFLAGS) -D_OPENWRT -std=c++11" \
-		LDFLAGS="$(TARGET_LDFLAGS)"
+	# 手动指定编译命令，绕过官方不兼容的 Makefile
+	$(TARGET_CXX) $(TARGET_CXXFLAGS) -D_OPENWRT -std=c++11 -O2 -o $(PKG_BUILD_DIR)/MMDVMHost $(PKG_BUILD_DIR)/*.cpp -lpthread
 endef
 
 define Package/mmdvm-host/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/MMDVMHost $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc
-	$(INSTALL_CONF) ./files/MMDVM.ini $(1)/etc/MMDVM.ini
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/mmdvm.init $(1)/etc/init.d/mmdvmhost
 endef
 
 $(eval $(call BuildPackage,mmdvm-host))
