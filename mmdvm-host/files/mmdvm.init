@@ -1,1 +1,11 @@
 
+#!/bin/sh /etc/rc.common
+START=99
+USE_PROCD=1
+
+start_service() {
+	procd_open_instance
+	procd_set_param command /usr/bin/MMDVMHost /etc/MMDVM.ini
+	procd_set_param respawn  # 进程挂掉自动重启
+	procd_close_instance
+}
