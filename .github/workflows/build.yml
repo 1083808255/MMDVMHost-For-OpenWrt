@@ -40,15 +40,23 @@ jobs:
           cd sdk
           export TERM=xterm
           
+          # 核心修复 1：剔除导致下载超时的 mirror 镜像源
+          sed -i "/mirror/d" scripts/download.pl
+          
           cp feeds.conf.default feeds.conf
           echo "src-git mmdvm file://$GITHUB_WORKSPACE/mmdvm-src" >> feeds.conf
           
           ./scripts/feeds update -a
-          ./scripts/feeds install -a -p mmdvm
+          
+          # 核心修复 2：只安装我们的包以及它的必要依赖
+          ./scripts/feeds install mmdvm-host dmr-gateway
+          ./scripts/feeds install nlohmannjson || true
           
           echo "=== 生成基础配置 ==="
-          # 加上 V=s 并把报错暴露出来，用 || true 防止直接崩溃
-          make defconfig V=s || true
+          # 强制选中我们的包，防止被 defconfig 过滤掉
+          echo "CONFIG_PACKAGE_mmdvm-host=m" >> .config
+          echo "CONFIG_PACKAGE_dmr-gateway=m" >> .config
+          make defconfig V=s
           
           echo "=== 编译 MMDVMHost ==="
           make package/mmdvm-host/compile V=s
@@ -61,10 +69,10 @@ jobs:
           DEST_DIR="mmdvm-src/ipk/ipk-${{ matrix.target }}"
           mkdir -p "$DEST_DIR"
           
-          # 抓取编译出来的所有 ipk（包括自动编译的依赖库）
+          # 抓取编译出来的所有 ipk
           cp sdk/bin/packages/${{ matrix.arch }}/*/*.ipk "$DEST_DIR/" || true
           
-          # 生成带正确 Architecture 的索引文件
+          # 生成索引文件
           cd "$DEST_DIR"
           echo "Architecture: ${{ matrix.arch }}" > Packages
           for f in *.ipk; do
@@ -84,7 +92,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: G4KLX-MMDVM-${{ matrix.target }}
-          path: sdk/bin/packages/${{ matrix.arch }}/*/*.ipk
+          # 注意这里直接抓 ipk 文件夹
+          path: mmdvm-src/ipk/ipk-${{ matrix.target }}/*.ipk
 
       - name: Auto Commit to Repo
         uses: stefanzweifel/git-auto-commit-action@v5
