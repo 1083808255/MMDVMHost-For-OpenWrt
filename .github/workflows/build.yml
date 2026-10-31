@@ -24,7 +24,6 @@ jobs:
         with:
           path: mmdvm-src
 
-      # 缓存 feeds，避免每次重复拉取庞大的包索引
       - name: Cache OpenWrt Feeds
         uses: actions/cache@v4
         with:
@@ -54,7 +53,6 @@ jobs:
           sed -i 's/mirror2.openwrt.org/sources.cdn.openwrt.org/g' scripts/download.pl
           sed -i 's/mirror1.openwrt.org/sources.cdn.openwrt.org/g' scripts/download.pl
           
-          # 2. 物理删除可能存在的旧配置文件（防止缓存冲突）
           rm -f .config
           
           cp feeds.conf.default feeds.conf
@@ -65,23 +63,21 @@ jobs:
           ./scripts/feeds install nlohmannjson || true
           
           echo "=== 生成极简配置 ==="
-          # 3. 强制指定架构并生成新配置
           echo "${{ matrix.target == 'x86' && 'CONFIG_TARGET_x86=y\nCONFIG_TARGET_x86_64=y' || 'CONFIG_TARGET_ramips=y\nCONFIG_TARGET_ramips_mt76x8=y\nCONFIG_TARGET_ramips_mt76x8_DEVICE_generic=y' }}" > .config
+          
+          # 显式要求编译这些库（OpenWrt 会自动处理它们之间的编译顺序）
           echo "CONFIG_PACKAGE_mmdvm-host=m" >> .config
           echo "CONFIG_PACKAGE_dmr-gateway=m" >> .config
           echo "CONFIG_PACKAGE_nlohmannjson=y" >> .config
+          echo "CONFIG_PACKAGE_libmosquitto=y" >> .config
           
-          # 4. 终极防御：使用 yes 自动回车，并强制生成配置
           yes "" | make defconfig
           
-          # 5. 多线程预下载（加入 -i 忽略部分下载失败）
-          make download -j8 V=w -i
+          echo "=== 开始编译（放弃强制多线程，防内存溢出被杀） ==="
+          # 不用 -j 并发，用默认的稳健模式
+          make package/mmdvm-host/compile V=w
           
-          echo "=== 编译 MMDVMHost ==="
-          make package/mmdvm-host/compile -j$(nproc) V=w
-          
-          echo "=== 编译 DMRGateway ==="
-          make package/dmr-gateway/compile -j$(nproc) V=w
+          make package/dmr-gateway/compile V=w
 
       - name: Collect IPKs
         run: |
