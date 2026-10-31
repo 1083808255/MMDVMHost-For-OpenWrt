@@ -40,15 +40,16 @@ jobs:
           cd sdk
           export TERM=xterm
           
-          # 核心修复 1：剔除导致下载超时的 mirror 镜像源
-          sed -i "/mirror/d" scripts/download.pl
+          # 核心修复：用 sed 进行安全的域名替换，把导致超时的 mirror 替换为官方 CDN，不会破坏语法
+          sed -i 's/mirror2.openwrt.org/sources.cdn.openwrt.org/g' scripts/download.pl
+          sed -i 's/mirror1.openwrt.org/sources.cdn.openwrt.org/g' scripts/download.pl
           
           cp feeds.conf.default feeds.conf
           echo "src-git mmdvm file://$GITHUB_WORKSPACE/mmdvm-src" >> feeds.conf
           
           ./scripts/feeds update -a
           
-          # 核心修复 2：只安装我们的包以及它的必要依赖
+          # 只安装我们的包以及它们的必要依赖（nlohmannjson）
           ./scripts/feeds install mmdvm-host dmr-gateway
           ./scripts/feeds install nlohmannjson || true
           
@@ -69,10 +70,10 @@ jobs:
           DEST_DIR="mmdvm-src/ipk/ipk-${{ matrix.target }}"
           mkdir -p "$DEST_DIR"
           
-          # 抓取编译出来的所有 ipk
+          # 抓取编译出来的所有 ipk（包括自动编译的依赖库）
           cp sdk/bin/packages/${{ matrix.arch }}/*/*.ipk "$DEST_DIR/" || true
           
-          # 生成索引文件
+          # 生成带正确 Architecture 的索引文件
           cd "$DEST_DIR"
           echo "Architecture: ${{ matrix.arch }}" > Packages
           for f in *.ipk; do
@@ -92,7 +93,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: G4KLX-MMDVM-${{ matrix.target }}
-          # 注意这里直接抓 ipk 文件夹
           path: mmdvm-src/ipk/ipk-${{ matrix.target }}/*.ipk
 
       - name: Auto Commit to Repo
