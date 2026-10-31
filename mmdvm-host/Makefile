@@ -17,7 +17,7 @@ define Package/mmdvm-host
   SECTION:=net
   CATEGORY:=Network
   TITLE:=MMDVM Host for OpenWrt
-  # 加上了 libmosquitto 依赖
+  # 加回 MQTT 依赖
   DEPENDS:=+libstdcpp +libpthread +nlohmannjson +libmosquitto
 endef
 
@@ -28,7 +28,7 @@ define Build/Prepare
 endef
 
 define Build/Compile
-	# 核心修改：加上了 -I$(STAGING_DIR)/usr/include/mosquitto 和链接 -lmosquitto
+	# 加上 mosquitto 的头文件路径和链接库
 	$(TARGET_CXX) $(TARGET_CXXFLAGS) -I$(STAGING_DIR)/usr/include -I$(STAGING_DIR)/usr/include/mosquitto -D_OPENWRT -std=c++11 -O2 -o $(PKG_BUILD_DIR)/MMDVMHost $(PKG_BUILD_DIR)/*.cpp -lpthread -lmosquitto
 endef
 
