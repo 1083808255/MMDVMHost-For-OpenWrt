@@ -65,19 +65,18 @@ jobs:
           echo "=== 生成极简配置 ==="
           echo "${{ matrix.target == 'x86' && 'CONFIG_TARGET_x86=y\nCONFIG_TARGET_x86_64=y' || 'CONFIG_TARGET_ramips=y\nCONFIG_TARGET_ramips_mt76x8=y\nCONFIG_TARGET_ramips_mt76x8_DEVICE_generic=y' }}" > .config
           
-          # 显式要求编译这些库（OpenWrt 会自动处理它们之间的编译顺序）
           echo "CONFIG_PACKAGE_mmdvm-host=m" >> .config
           echo "CONFIG_PACKAGE_dmr-gateway=m" >> .config
           echo "CONFIG_PACKAGE_nlohmannjson=y" >> .config
           echo "CONFIG_PACKAGE_libmosquitto=y" >> .config
           
-          yes "" | make defconfig
+          # 直接生成配置，避免管道引发的 Broken pipe 错误
+          make defconfig
           
-          echo "=== 开始编译（放弃强制多线程，防内存溢出被杀） ==="
-          # 不用 -j 并发，用默认的稳健模式
-          make package/mmdvm-host/compile V=w
+          echo "=== 开始编译 ==="
+          make package/mmdvm-host/compile V=s
           
-          make package/dmr-gateway/compile V=w
+          make package/dmr-gateway/compile V=s
 
       - name: Collect IPKs
         run: |
